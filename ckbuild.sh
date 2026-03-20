@@ -20,7 +20,7 @@ RV_REPO="https://api.github.com/repos/Rv-Project/RvClang/releases/latest"
 GCC_REPO="https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9"
 GCC64_REPO="https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9"
 # AnyKernel3
-AK3_URL="https://github.com/Flopster101/AnyKernel3"
+AK3_URL="https://github.com/malkist01/AnyKernel2"
 
 # Device fragments
 GINKGO_FRAGMENT="vendor/ginkgo.config"
@@ -38,19 +38,19 @@ shift
 # Set device-specific variables
 case "$TARGET_DEVICE" in
     ginkgo)
-        AK3_BRANCH="floppy-reborn"
+        AK3_BRANCH="unified"
         DEVICE="Redmi Note 8/8T"
         CODENAME="ginkgo"
         FRAGMENT="$GINKGO_FRAGMENT"
         ;;
     laurel_sprout)
-        AK3_BRANCH="floppy-reborn-laurel"
+        AK3_BRANCH="unified"
         DEVICE="Xiaomi Mi A3"
         CODENAME="laurel_sprout"
         FRAGMENT="$LAUREL_FRAGMENT"
         ;;
     mitrinket)
-        AK3_BRANCH="floppy-unity"
+        AK3_BRANCH="unified"
         DEVICE="Redmi Note 8/8T and Xiaomi Mi A3"
         CODENAME="mitrinket"
         FRAGMENT="vendor/unified.config"
@@ -139,7 +139,7 @@ fi
 ## Customizable vars
 
 # FloppyKernel version
-FK_VER="v2.0b"
+FK_VER="v2.0"
 
 # Toggles
 USE_CCACHE=1
@@ -229,13 +229,9 @@ else
     echo -e "\nINFO: Overriding default toolchain"
 fi
 
-## Secrets
-if [[ "$TEST_CHANNEL" == "0" ]]; then
-    TELEGRAM_CHAT_ID="$(cat ../chat)"
-elif [[ "$TEST_CHANNEL" == "1" ]]; then
-    TELEGRAM_CHAT_ID="$(cat ../chat_test)"
-fi
-TELEGRAM_BOT_TOKEN="$(cat ../bot_token)"
+## Telegram
+CHAT_ID="-1002287610863"
+BOT_TOKEN="7868194496:AAGY7WwRRbeCOPYOnczoCPh2psC43Q0F3JI"
 
 ## Build type
 LINUX_VER=$(make kernelversion 2>/dev/null)
@@ -261,7 +257,7 @@ else
     CK_TYPE="Vanilla"
     CK_TYPE_SHORT="V"
 fi
-ZIP_PATH="$WP/Floppy_$FK_VER-$CK_TYPE-$CODENAME-$DATE.zip"
+ZIP_PATH="$WP/Anjani_$FK_VER-$CK_TYPE-$CODENAME-$DATE.zip"
 
 echo -e "\nINFO: Build info:
 - Device: $DEVICE ($CODENAME)
@@ -546,6 +542,9 @@ prep_toolchain() {
 install_deps_deb
 get_toolchain "$CLANG_TYPE"
 prep_toolchain "$CLANG_TYPE"
+TC_INFO=$(clang --version | head -n 1)
+LLVM_INFO=$(llvm-config --version | head -n 1)g
+PHONE="Redmi Note 8/8T"
 
 ## Telegram info variables
 
@@ -562,11 +561,23 @@ CAPTION_BUILD="Build info:
 # Functions to send file(s) via Telegram's BOT api.
 tgs() {
     MD5=$(md5sum "$1" | cut -d' ' -f1)
-    curl -fsSL -X POST -F document=@"$1" https://api.telegram.org/bot"${TELEGRAM_BOT_TOKEN}"/sendDocument \
-        -F "chat_id=${TELEGRAM_CHAT_ID}" \
-        -F "parse_mode=Markdown" \
-        -F "disable_web_page_preview=true" \
-        -F "caption=${CAPTION_BUILD}*MD5*: \`$MD5\`" &>/dev/null
+    curl -fsSL -X POST -F document=@"${ZIP_PATH}" https://api.telegram.org/bot7868194496:AAGY7WwRRbeCOPYOnczoCPh2psC43Q0F3JI/sendDocument \
+        -F chat_id=-1002287610863" \
+        -F parse_mode=Markdown" \
+        -F caption="Build info:
+📱 Device : ${PHONE}
+📦 Kernel Name : ${KERNEL_NAME}
+🍃 Kernel Version : ${LINUX_VER}
+
+🔧 Toolchain : ${TC_INFO}
+⚙️ Llvm Version : ${LLVM_VERSION}
+
+💻 Build host: ${BUILD_HOST}
+🛠️ Build variant: ${CK_TYPE}
+
+⌛ Build Time : ${BUILD_TIME}
+🕒 Build Date : ${BUILD_DATETIME}
+"
 }
 
 prep_build() {
@@ -591,373 +602,4 @@ build() {
         if [[ "$DO_KSU" = "1" ]] || [[ "$DO_SUKI" = "1" ]]; then
              echo "ERROR: Can't regenerate with KSU or ReSukiSU argument"
              exit 1
-        fi
-        # Clean any existing .config to avoid picking up settings from previous builds
-        rm -f out/.config
-        make O=out ARCH=arm64 "$DEFCONFIG" 2>&1 | tee log.txt
-    else
-        FRAGMENTS="$BASE_FRAGMENT $FRAGMENT"
-        [[ "$DO_KSU" == "1" ]] && FRAGMENTS="$FRAGMENTS ksu.config"
-        [[ "$DO_SUKI" == "1" ]] && FRAGMENTS="$FRAGMENTS sukisu.config"
-        [[ "$DO_RKSU" == "1" ]] && FRAGMENTS="$FRAGMENTS rksu.config"
-        if [[ "$CKB_CRASHKEY" == "1" ]]; then
-            FRAGMENTS="$FRAGMENTS crash_key.config"
-            # Append CrashKey to the ZIP name so these builds are identifiable
-            ZIP_PATH="${ZIP_PATH%.zip}-CrashKey.zip"
-        fi
-
-        make O=out ARCH=arm64 "$DEFCONFIG" $FRAGMENTS 2>&1 | tee log.txt
-    fi
-
-    # Delete leftovers
-    rm -f out/arch/arm64/boot/Image*
-    rm -f out/arch/arm64/boot/dtbo*
-    rm -f log.txt
-
-    export LLVM=1 LLVM_IAS=1
-    export ARCH=arm64
-
-    if [[ "$DO_MENUCONFIG" == "1" ]]; then
-        make O=out menuconfig
-    fi
-
-    if [[ "$DO_REGEN" = "1" ]]; then
-        cp -f out/.config "arch/arm64/configs/$DEFCONFIG"
-        echo "INFO: Configuration regenerated. Check the changes!"
-        exit 0
-    fi
-
-    # Disallow Release builds when CrashKey testing is enabled
-    if [[ "$CKB_CRASHKEY" == "1" && "$IS_RELEASE" == "1" ]]; then
-        echo "ERROR: CrashKey builds cannot be Release builds"
-        exit 1
-    fi
-
-    if [[ "$IS_RELEASE" == "1" ]]; then
-        VERSION_STR="\"-Floppy-$FK_VER-$CK_TYPE_SHORT-release\""
-        VERSION_NOAUTO=1
-    else
-        VERSION_STR="\"-Floppy-$FK_VER-$CK_TYPE_SHORT\""
-    fi
-
-    if [[ "$CKB_CRASHKEY" == "1" ]]; then
-        # Append CrashKey to the LOCALVERSION string
-        VERSION_STR="${VERSION_STR%\"}-CrashKey\""
-    fi
-
-    scripts/config --file "$KDIR/out/.config" --set-val LOCALVERSION "$VERSION_STR"
-
-    if [[ "$VERSION_NOAUTO" == "1" ]]; then
-        scripts/config --file "$KDIR/out/.config" --disable LOCALVERSION_AUTO
-    fi
-
-    if [[ "$DO_FLTO" == "1" ]]; then
-        scripts/config --file "$KDIR/out/.config" --enable CONFIG_LTO_CLANG
-        scripts/config --file "$KDIR/out/.config" --disable CONFIG_THINLTO
-    fi
-
-    ## Start the build
-    echo -e "\nINFO: Starting compilation...\n"
-
-    if [[ "$USE_CCACHE" == "1" ]]; then
-        make -j$(nproc --all) O=out \
-        CC="ccache clang" \
-        CROSS_COMPILE="$CCARM64_PREFIX" \
-        CROSS_COMPILE_ARM32="$CCARM_PREFIX" \
-        CLANG_TRIPLE="aarch64-linux-gnu-" \
-        READELF="llvm-readelf" \
-        OBJSIZE="llvm-size" \
-        OBJDUMP="llvm-objdump" \
-        OBJCOPY="llvm-objcopy" \
-        STRIP="llvm-strip" \
-        NM="llvm-nm" \
-        AR="llvm-ar" \
-        HOSTAR="llvm-ar" \
-        HOSTAS="llvm-as" \
-        HOSTNM="llvm-nm" \
-        LD="ld.lld" 2>&1 | tee log.txt
-    else
-        make -j$(nproc --all) O=out \
-        CC="clang" \
-        CROSS_COMPILE="$CCARM64_PREFIX" \
-        CROSS_COMPILE_ARM32="$CCARM_PREFIX" \
-        CLANG_TRIPLE="aarch64-linux-gnu-" \
-        READELF="llvm-readelf" \
-        OBJSIZE="llvm-size" \
-        OBJDUMP="llvm-objdump" \
-        OBJCOPY="llvm-objcopy" \
-        STRIP="llvm-strip" \
-        NM="llvm-nm" \
-        AR="llvm-ar" \
-        HOSTAR="llvm-ar" \
-        HOSTAS="llvm-as" \
-        HOSTNM="llvm-nm" \
-        LD="ld.lld" 2>&1 | tee log.txt
-    fi
-}
-
-dtbo_build() {
-    echo -e "\nINFO: Running dtbo build..."
-    mkdir -p "$DTBO_TMP"
-    local IN_DTBO=""
-    case "$CODENAME" in
-        ginkgo)
-            IN_DTBO="$IN_DTBO_GINKGO"
-            python3 "$KDIR/scripts/dtc/libfdt/mkdtboimg.py" create "$OUT_DTBO" --custom0=0x00000000 --custom1=0x00000000 --page_size=4096 "$IN_DTBO"
-            ;;
-        laurel_sprout)
-            IN_DTBO="$IN_DTBO_LAUREL"
-            python3 "$KDIR/scripts/dtc/libfdt/mkdtboimg.py" create "$OUT_DTBO" --custom0=0x00000000 --custom1=0x00000000 --page_size=4096 "$IN_DTBO"
-            ;;
-        mitrinket)
-            python3 "$KDIR/scripts/dtc/libfdt/mkdtboimg.py" create "$DTBO_TMP/dtbo-ginkgo.img" --custom0=0x00000000 --custom1=0x00000000 --page_size=4096 "$IN_DTBO_GINKGO"
-            python3 "$KDIR/scripts/dtc/libfdt/mkdtboimg.py" create "$DTBO_TMP/dtbo-laurel_sprout.img" --custom0=0x00000000 --custom1=0x00000000 --page_size=4096 "$IN_DTBO_LAUREL"
-            OUT_DTBO="$DTBO_TMP/dtbo-ginkgo.img"
-            ;;
-        *)
-            echo "ERROR: Unknown device for DTBO build!"
-            exit 1
-            ;;
-    esac
-}
-
-apply_kpm_patch() {
-    if [[ "$DO_SUKI" != "1" ]]; then
-        return 0
-    fi
-
-    echo -e "\nINFO: Applying KPM patch..."
-
-    # Vars
-    local KPM_URL="https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU_patch/83aa64b7548890bb1f2eff6c990c03a1802df27b/kpm/patch_linux"
-    local MAGISKBOOT="$KDIR/floppy_utils/magiskboot"
-    local WORK_DIR="$WP/kpm_work"
-    local FULL_OUT_IMAGE="$KDIR/$OUT_IMAGE"
-
-    # Check if magiskboot exists and is executable
-    if [[ ! -f "$MAGISKBOOT" ]] || [[ ! -x "$MAGISKBOOT" ]]; then
-        echo "ERROR: magiskboot not found or not executable at $MAGISKBOOT"
-        return 1
-    fi
-
-    # Setup
-    mkdir -p "$WORK_DIR"
-    cd "$WORK_DIR"
-
-    if ! curl -LSs "$KPM_URL" -o patch; then
-        echo "ERROR: Failed to download KPM patch script"
-        cd "$KDIR"
-        rm -rf "$WORK_DIR"
-        return 1
-    fi
-    chmod +x patch
-
-    # Copy kernel image to working directory
-    local img_file=""
-    if [[ -f "$FULL_OUT_IMAGE" ]]; then
-        cp "$FULL_OUT_IMAGE" .
-        img_file=$(basename "$FULL_OUT_IMAGE")
-    else
-        echo "ERROR: Kernel image not found at $FULL_OUT_IMAGE"
-        cd "$KDIR"
-        rm -rf "$WORK_DIR"
-        return 1
-    fi
-
-    # Extract kernel image for patching
-    if [[ "$img_file" == *"Image.gz-dtb" ]]; then
-        echo "INFO: Extracting kernel from Image.gz-dtb..."
-        if ! "$MAGISKBOOT" split "$img_file" || [[ ! -f kernel ]]; then
-            echo "ERROR: Failed to split $img_file"
-            cd "$KDIR"
-            rm -rf "$WORK_DIR"
-            return 1
-        fi
-        cp kernel Image
-    elif [[ "$img_file" == *"Image.gz" ]]; then
-        echo "INFO: Decompressing Image.gz..."
-        if ! "$MAGISKBOOT" decompress "$img_file" Image 2>/dev/null && ! gunzip -c "$img_file" > Image 2>/dev/null; then
-            echo "ERROR: Failed to decompress $img_file"
-            cd "$KDIR" || exit
-            rm -rf "$WORK_DIR"
-            return 1
-        fi
-    elif [[ "$img_file" == *"Image" ]]; then
-        cp "$img_file" Image
-    else
-        echo "ERROR: Unsupported kernel image format: $img_file"
-        cd "$KDIR"
-        rm -rf "$WORK_DIR"
-        return 1
-    fi
-
-    # Check Image file
-    if [[ ! -f Image ]]; then
-        echo "ERROR: Image file not found after extraction"
-        cd "$KDIR"
-        rm -rf "$WORK_DIR"
-        return 1
-    fi
-
-    # Apply KPM patch
-    echo "INFO: Patching kernel..."
-    if ./patch 2>&1; then
-        if [[ -f oImage ]]; then
-            mv oImage Image
-        fi
-    else
-        echo "ERROR: KPM patch script failed"
-        cd "$KDIR"
-        rm -rf "$WORK_DIR"
-        return 1
-    fi
-
-    # Recompress and copy back to original location
-    echo "INFO: Repacking kernel image..."
-    if [[ "$img_file" == *"Image.gz-dtb" ]]; then
-        if ! "$MAGISKBOOT" compress=gzip Image kernel_new && ! gzip -c Image > kernel_new; then
-            echo "ERROR: Failed to compress patched Image"
-            cd "$KDIR"
-            rm -rf "$WORK_DIR"
-            return 1
-        fi
-
-        if [[ ! -f kernel_dtb ]]; then
-            echo "ERROR: kernel_dtb not found, cannot recreate Image.gz-dtb"
-            cd "$KDIR"
-            rm -rf "$WORK_DIR"
-            return 1
-        fi
-
-        cat kernel_new kernel_dtb > Image.gz-dtb
-        cp Image.gz-dtb "$FULL_OUT_IMAGE"
-    elif [[ "$img_file" == *"Image.gz" ]]; then
-        if ! gzip -c Image > Image.gz; then
-            echo "ERROR: Failed to compress patched Image"
-            cd "$KDIR"
-            rm -rf "$WORK_DIR"
-            return 1
-        fi
-        cp Image.gz "$FULL_OUT_IMAGE"
-    else
-        cp Image "$FULL_OUT_IMAGE"
-    fi
-
-    echo "INFO: KPM patching completed successfully"
-    cd "$KDIR"
-    rm -rf "$WORK_DIR"
-    return 0
-}
-
-post_build() {
-    ## Check if the kernel binaries were built.
-    if [[ "$CODENAME" == "unified" ]]; then
-        if [[ -f "$OUT_IMAGE" ]] && [[ -f "$DTBO_TMP/dtbo-ginkgo.img" ]] && [[ -f "$DTBO_TMP/dtbo-laurel_sprout.img" ]] && [[ -f "$OUT_DTB_GINKGO" ]] && [[ -f "$OUT_DTB_LAUREL" ]]; then
-            echo -e "\nINFO: Kernel compiled succesfully! Zipping up..."
-        else
-            echo -e "\nERROR: Kernel files not found! Compilation failed?"
-            echo -e "\nINFO: Uploading log to 0x0.st\n"
-            curl -F'file=@log.txt' http://0x0.st || echo "WARNING: Failed to upload log to 0x0.st (ignored)"
-            exit 1
-        fi
-    elif [[ -f "$OUT_IMAGE" ]] && [[ -f "$OUT_DTBO" ]] && [[ -f "$OUT_DTB" ]]; then
-        echo -e "\nINFO: Kernel compiled succesfully! Zipping up..."
-    else
-        echo -e "\nERROR: Kernel files not found! Compilation failed?"
-        echo -e "\nINFO: Uploading log to 0x0.st\n"
-        curl -F'file=@log.txt' http://0x0.st || echo "WARNING: Failed to upload log to 0x0.st (ignored)"
-        exit 1
-    fi
-
-    # If local AK3 copy exists, assume testing.
-    if [[ -d "$AK3_DIR" ]]; then
-        AK3_TEST=1
-        echo -e "\nINFO: AK3_TEST flag set because local AnyKernel3 dir was found"
-    else
-        if ! git clone -q --depth=1 -b "$AK3_BRANCH" "$AK3_URL" "$AK3_DIR"; then
-            echo -e "\nERROR: Failed to clone AnyKernel3!"
-            exit 1
-        fi
-    fi
-
-    ## Copy the built binaries
-    cp "$OUT_IMAGE" "$AK3_DIR"
-    if [[ "$CODENAME" == "mitrinket" ]]; then
-        # Device-named DTBOs (required in mitrinket unified builds)
-        cp "$OUT_DTBO" "$AK3_DIR/dtbo-ginkgo.img"
-        cp "$DTBO_TMP/dtbo-laurel_sprout.img" "$AK3_DIR/dtbo-laurel_sprout.img"
-        cp "$OUT_DTB_GINKGO" "$AK3_DIR/dtb-ginkgo"
-        cp "$OUT_DTB_LAUREL" "$AK3_DIR/dtb-laurel_sprout"
-    else
-        cp "$OUT_DTBO" "$AK3_DIR"
-        cp "$OUT_DTB" "$AK3_DIR/dtb"
-    fi
-    rm -f *zip
-
-    ## Prepare kernel flashable zip
-    cd "$AK3_DIR"
-    git checkout "$AK3_BRANCH" &> /dev/null
-    zip -r9 "$ZIP_PATH" * -x '*.git*' README.md *placeholder
-    cd ..
-    rm -rf "$AK3_DIR"
-    echo -e "\nINFO: Completed in $((SECONDS / 60)) minute(s) and $((SECONDS % 60)) second(s) !"
-    echo "Zip: $ZIP_PATH"
-    echo " "
-    if [[ "$AK3_TEST" == "1" ]]; then
-        echo -e "\nINFO: Skipping deletion of AnyKernel3 dir because test flag is set"
-    else
-        rm -rf "$AK3_DIR"
-    fi
-    cd "$KDIR"
-}
-
-upload() {
-    if [[ "$DO_ZXZ" == "1" ]]; then
-    echo -e "\nINFO: Uploading to 0x0.st...\n"
-    curl -F'file=@'"$ZIP_PATH" http://0x0.st || echo "WARNING: Failed to upload build to 0x0.st (ignored)"
-    fi
-
-    if [[ "$DO_TG" == "1" ]]; then
-            echo -e "\nINFO: Uploading to Telegram...\n"
-            tgs "$ZIP_PATH"
-            echo "INFO: Done!"
-    fi
-    if [[ "$LOG_UPLOAD" == "1" ]]; then
-        echo -e "\nINFO: Uploading log to 0x0.st\n"
-        curl -F'file=@log.txt' http://0x0.st || echo "WARNING: Failed to upload log to 0x0.st (ignored)"
-    fi
-    # Delete any leftover zip files
-    # rm -f "$WP/FloppyKernel*zip"
-}
-
-clean() {
-    make O=out clean
-    make O=out mrproper
-}
-
-clean_tmp() {
-    echo -e "INFO: Cleaning after build..."
-    rm -f "$OUT_IMAGE"
-    rm -f "$OUT_DTBO"
-    rm -rf "$DTBO_TMP"
-}
-
-## Run build
-# Do a clean build?
-if [[ "$DO_CLEAN" == "1" ]]; then
-    clean
-fi
-prep_build
-build
-
-# Apply KPM patch for ReSukiSU builds
-if ! apply_kpm_patch; then
-    echo "ERROR: KPM patching failed"
-    exit 1
-fi
-
-dtbo_build
-post_build
-clean_tmp
-
-upload
+        
