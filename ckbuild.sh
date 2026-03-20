@@ -14,6 +14,7 @@ SD_BRANCH="14"
 PC_REPO="https://github.com/kdrag0n/proton-clang"
 LZ_REPO="https://gitlab.com/Jprimero15/lolz_clang.git"
 RC_URL="https://github.com/kutemeikito/RastaMod69-Clang/releases/download/RastaMod69-Clang-20.0.0-release/RastaMod69-Clang-20.0.0.tar.gz"
+GOC_URL="https://github.com/bachnxuan/aosp_clang_mirror/releases/download/clang-r584948b-14726520/clang-r584948b.tar.gz"
 GC_REPO="https://api.github.com/repos/greenforce-project/greenforce_clang/releases/latest"
 ZC_REPO="https://raw.githubusercontent.com/ZyCromerZ/Clang/refs/heads/main/Clang-main-link.txt"
 RV_REPO="https://api.github.com/repos/Rv-Project/RvClang/releases/latest"
@@ -90,8 +91,15 @@ BASE_FRAGMENT="vendor/xiaomi-trinket.config"
 KERNEL_URL="https://github.com/Flopster101/flop_ginkgo_kernel"
 SECONDS=0 # builtin bash timer
 DATE="$(date '+%Y%m%d-%H%M')"
-BUILD_HOST="$USER@$(hostname)"
+BUILD_HOST="android@phone"
+KERNEL_NAME="AnjaniLaurens"
+# =============== DATE (WIB) ===============
+DATE_TITLE=$(TZ=Asia/Jakarta date +"%d%m%Y")
+TIME_TITLE=$(TZ=Asia/Jakarta date +"%H%M%S")
+BUILD_DATETIME=$(TZ=Asia/Jakarta date +"%d %B %Y")
+
 # Paths
+GOC_DIR="$TC_DIR/googleclang"
 TC_DIR="$WP/toolchains"
 SD_DIR="$TC_DIR/sdclang"
 AC_DIR="$TC_DIR/aospclang"
@@ -139,7 +147,7 @@ fi
 ## Customizable vars
 
 # FloppyKernel version
-FK_VER="v2.0"
+FK_VER=""
 
 # Toggles
 USE_CCACHE=1
@@ -151,7 +159,7 @@ DO_RKSU=0
 DO_CLEAN=0
 DO_MENUCONFIG=0
 IS_RELEASE=0
-DO_TG=0
+DO_TG=1
 DO_REGEN=0
 DO_ZXZ=0
 DO_FLTO=0
@@ -257,12 +265,12 @@ else
     CK_TYPE="Vanilla"
     CK_TYPE_SHORT="V"
 fi
-ZIP_PATH="$WP/Anjani_$FK_VER-$CK_TYPE-$CODENAME-$DATE.zip"
+ZIP_PATH="$WP/AnjaniLaurens$FK_VER-$CK_TYPE-$CODENAME-$DATE.zip"
 
 echo -e "\nINFO: Build info:
 - Device: $DEVICE ($CODENAME)
 - Addons: $CK_TYPE
-- Anjani version: $FK_VER
+- Floppy version: $FK_VER
 - Linux version: $LINUX_VER
 - Defconfig: $DEFCONFIG
 - Build date: $DATE
@@ -340,6 +348,26 @@ get_toolchain() {
                 fi
                 rm -f "$WP/RastaMod69-clang.tar.gz"
                 echo "INFO: RastaMod69 Clang successfully cloned to $toolchain_dir"
+            fi
+            ;;
+        google)
+            toolchain_dir="$GOC_DIR"
+            if [[ ! -d "$toolchain_dir" ]]; then
+                echo "INFO: Google Clang not found! Cloning to $toolchain_dir..."
+                wget -q --show-progress "$GOC_URL" -O "$WP/clang-r584948b.tar.gz"
+                if [[ $? -ne 0 ]]; then
+                    echo "ERROR: Download failed! Aborting..."
+                    rm -f "$WP/clang-r584948b.tar.gz"
+                    exit 1
+                fi
+                rm -rf clang && mkdir -p "$toolchain_dir" && tar -xf "$WP/clang-r584948b.tar.gz" -C "$toolchain_dir"
+                if [[ $? -ne 0 ]]; then
+                    echo "ERROR: Extraction failed! Aborting..."
+                    rm -f "$WP/clang-r584948b.tar.gz"
+                    exit 1
+                fi
+                rm -f "$WP/clang-r584948b.tar.gz"
+                echo "INFO: google Clang successfully cloned to $toolchain_dir"
             fi
             ;;
         lolz)
@@ -484,6 +512,10 @@ prep_toolchain() {
             toolchain_dir="$AC_DIR"
             echo "INFO: Toolchain: AOSP Clang"
             ;;
+        google)
+            toolchain_dir="$GOC_DIR"
+            echo "INFO: Toolchain: Google Clang"
+            ;;
         sdclang)
             toolchain_dir="$SD_DIR/compiler"
             echo "INFO: Toolchain: Snapdragon Clang"
@@ -546,18 +578,6 @@ TC_INFO=$(clang --version | head -n 1)
 LLVM_INFO=$(llvm-config --version | head -n 1)g
 PHONE="Redmi Note 8/8T"
 
-## Telegram info variables
-
-CAPTION_BUILD="Build info:
-*Device*: \`${DEVICE} [${CODENAME}]\`
-*Kernel Version*: \`${LINUX_VER}\`
-*Compiler*: \`${KBUILD_COMPILER_STRING}\`
-*Build host*: \`${BUILD_HOST}\`
-*Commit / Branch*: [($(git rev-parse HEAD | cut -c -7))]($(echo $KERNEL_URL)/commit/$(git rev-parse HEAD)) / \`$(git rev-parse --abbrev-ref HEAD)\`
-*Build variant*: \`${CK_TYPE}\` / \`${BUILD_TYPE}$( [ "$DO_CLEAN" -eq 1 ] && echo " (clean)" || echo " (dirty)")\`
-*Timestamp*: \`${DATE}\`
-"
-
 # Functions to send file(s) via Telegram's BOT api.
 tgs() {
     MD5=$(md5sum "$1" | cut -d' ' -f1)
@@ -566,40 +586,4 @@ tgs() {
         -F parse_mode=Markdown" \
         -F caption="Build info:
 📱 Device : ${PHONE}
-📦 Kernel Name : ${KERNEL_NAME}
-🍃 Kernel Version : ${LINUX_VER}
-
-🔧 Toolchain : ${TC_INFO}
-⚙️ Llvm Version : ${LLVM_VERSION}
-
-💻 Build host: ${BUILD_HOST}
-🛠️ Build variant: ${CK_TYPE}
-
-⌛ Build Time : ${BUILD_TIME}
-🕒 Build Date : ${BUILD_DATETIME}
-"
-}
-
-prep_build() {
-    ## Prepare ccache
-    if [[ "$USE_CCACHE" == "1" ]]; then
-        echo "INFO: ccache enabled"
-        if [[ "$IS_GP" == "1" ]]; then
-            export CCACHE_DIR="$WP/.ccache"
-            ccache -M 10G
-        else
-            echo "WARNING: Environment is not Gitpod, please make sure you setup your own ccache configuration!"
-        fi
-    fi
-
-    # Show compiler information
-    echo -e "INFO: Compiler: $KBUILD_COMPILER_STRING\n"
-}
-
-build() {
-    mkdir -p out
-    if [[ "$DO_REGEN" = "1" ]]; then
-        if [[ "$DO_KSU" = "1" ]] || [[ "$DO_SUKI" = "1" ]]; then
-             echo "ERROR: Can't regenerate with KSU or ReSukiSU argument"
-             exit 1
-        
+📦 Ker
