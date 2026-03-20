@@ -589,13 +589,12 @@ tgs() {
 📦 Kernel Name : ${KERNEL_NAME}
 🍃 Kernel Version : ${LINUX_VER}
 
-🔧 Toolchain : ${TC_INFO}
-⚙️ Llvm Version : ${LLVM_VERSION}
+🔧 Toolchain : ${KBUILD_COMPILER_STRING}
 
 💻 Build host: ${BUILD_HOST}
 🛠️ Build variant: ${CK_TYPE}
 
-⌛ Build Time : ${BUILD_TIME}
+⌛ Build Time : ${DATE}
 🕒 Build Date : ${BUILD_DATETIME}
 "
 }
