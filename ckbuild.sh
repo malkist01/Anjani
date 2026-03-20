@@ -224,7 +224,7 @@ LOG_UPLOAD=1
 
 # Pick aosp, proton, rm69, lolz, slim, greenforce, zyc, rv, custom
 if [[ -z "$CLANG_TYPE" ]]; then
-    CLANG_TYPE="aosp"
+    CLANG_TYPE="zyc"
 else
     echo -e "\nINFO: Overriding default toolchain"
 fi
@@ -262,7 +262,7 @@ ZIP_PATH="$WP/Anjani_$FK_VER-$CK_TYPE-$CODENAME-$DATE.zip"
 echo -e "\nINFO: Build info:
 - Device: $DEVICE ($CODENAME)
 - Addons: $CK_TYPE
-- Floppy version: $FK_VER
+- Anjani version: $FK_VER
 - Linux version: $LINUX_VER
 - Defconfig: $DEFCONFIG
 - Build date: $DATE
